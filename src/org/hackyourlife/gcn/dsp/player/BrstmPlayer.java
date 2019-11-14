@@ -20,9 +20,10 @@ public class BrstmPlayer {
     private boolean paused = false;
     private long position;
     private int track = -1;
+    private boolean doesLoop;
 
     /**
-     *
+     * Constructor for the brstm player
      * @param stream The stream that it needs to run, e.g. BRSTM or BFSTM
      * @param track The track/channel that plays, plays all tracks if it is set to -1
      */
@@ -76,6 +77,16 @@ public class BrstmPlayer {
     }
 
     /**
+     * Loops the audio file {@param amount} times.
+     * Use {@code Clip.LOOP_CONTINUOUSLY} for a non stopping loop.
+     * @param amount Loops the audio file x amount of times.
+     * @link javax.sound.sampled.Clip.LOOP_CONTINUOUSLY
+     */
+    public void loop(int amount) {
+        this.clip.loop(amount);
+    }
+
+    /**
      * Change the volume of the audio player
      * If percentage isnt between 0.0F and 1.0F it forces it to. using {@code Math.max(0.0F, Math.min(1.0F, percentage))}
      *
@@ -95,6 +106,36 @@ public class BrstmPlayer {
      */
     public boolean isPaused() {
         return paused;
+    }
+
+    /**
+     * @return The audio clip
+     */
+    public Clip getClip() {
+        return clip;
+    }
+
+    /**
+     * @return Get the current position of the audio player
+     */
+    public long getPosition() {
+        if (!this.isPaused())
+            return this.clip.getFramePosition();
+        return position;
+    }
+
+    /**
+     * @return The track/channel that is playing
+     */
+    public int getTrack() {
+        return track;
+    }
+
+    /**
+     * @return If the original audio file has a looping point.
+     */
+    public boolean doesLoop() {
+        return doesLoop;
     }
 
     /**
@@ -148,6 +189,9 @@ public class BrstmPlayer {
             // set loop to false
             Field field = stream.getClass().getDeclaredField("loop_flag");
             field.setAccessible(true);
+
+            doesLoop = field.getInt(stream) != 0;
+
             field.setInt(stream, 0);
 
             List<Byte> data = new ArrayList<>();
@@ -175,8 +219,10 @@ public class BrstmPlayer {
             clip = (Clip) AudioSystem.getLine(info);
             clip.open(sound);
             // setting looping point
-            clip.setLoopPoints(Math.toIntExact(loop_start_sample), Math.toIntExact(loop_end_sample));
-            clip.loop(Clip.LOOP_CONTINUOUSLY);
+            if (doesLoop) {
+                clip.setLoopPoints(Math.toIntExact(loop_start_sample), Math.toIntExact(loop_end_sample));
+                clip.loop(Clip.LOOP_CONTINUOUSLY);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
