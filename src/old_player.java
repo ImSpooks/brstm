@@ -1,18 +1,14 @@
-import java.io.RandomAccessFile;
-import java.io.File;
+import org.hackyourlife.gcn.dsp.*;
+
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
 import javax.sound.sampled.SourceDataLine;
-import org.hackyourlife.gcn.dsp.BFSTM;
-import org.hackyourlife.gcn.dsp.BRSTM;
-import org.hackyourlife.gcn.dsp.RS03;
-import org.hackyourlife.gcn.dsp.DSP;
-import org.hackyourlife.gcn.dsp.Stream;
-import org.hackyourlife.gcn.dsp.AsyncDecoder;
-import org.hackyourlife.gcn.dsp.FileFormatException;
+import java.io.File;
+import java.io.RandomAccessFile;
 
-public class player {
+@Deprecated
+public class old_player {
 	public static void main(String[] args) throws Exception {
 		int track = -1;
 		if(args.length < 1) {
@@ -28,7 +24,7 @@ public class player {
 			}
 		}
 		try {
-			String filename = args[0];
+			String filename = args[0].replace("%20", " ");
 			String filenameLeft = null;
 			String filenameRight = null;
 			int lext = filename.lastIndexOf('.');

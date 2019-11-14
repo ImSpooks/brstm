@@ -1,7 +1,10 @@
 package org.hackyourlife.gcn.dsp;
-import java.io.RandomAccessFile;
+
+import org.hackyourlife.gcn.dsp.input.InputData;
+
 import java.io.IOException;
-import java.io.File;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
 
 public class DSP implements Stream {
 	public final static int HEADER_SIZE = 0x60;
@@ -23,7 +26,7 @@ public class DSP implements Stream {
 	int	loop_hist1;
 	int	loop_hist2;
 
-	RandomAccessFile file;
+	InputData inputData;
 	DSP	ch2;
 	long	filepos;
 	long	filesize;
@@ -33,19 +36,35 @@ public class DSP implements Stream {
 
 	ADPCMDecoder decoder;
 
-	public DSP(RandomAccessFile file)
+	public DSP(InputData inputData)
 			throws FileFormatException, IOException {
 		ch2 = null;
-		this.file = file;
-		filesize = file.length();
+		this.inputData = inputData;
+		filesize = inputData.length();
 		readHeader();
 	}
 
-	public DSP(RandomAccessFile ch1, RandomAccessFile ch2)
+	public DSP(InputData ch1, InputData ch2)
 			throws FileFormatException, IOException {
 		this(ch1);
 		this.ch2 = new DSP(ch2);
 		validateChannel(this.ch2);
+	}
+
+	public DSP(RandomAccessFile file) throws IOException, FileFormatException {
+		this(InputData.getInputData(file));
+	}
+
+	public DSP(RandomAccessFile ch1, RandomAccessFile ch2) throws IOException, FileFormatException {
+		this(InputData.getInputData(ch1), InputData.getInputData(ch2));
+	}
+
+	public DSP(InputStream stream) throws IOException, FileFormatException {
+		this(InputData.getInputData(stream));
+	}
+
+	public DSP(InputStream ch1, InputStream ch2) throws IOException, FileFormatException {
+		this(InputData.getInputData(ch1), InputData.getInputData(ch2));
 	}
 
 	public final static int unsigned2signed16bit(int x) {
@@ -137,7 +156,7 @@ public class DSP implements Stream {
 		seek(0);
 		startoffset = 0x60;
 		byte[] header = new byte[0x60];
-		file.read(header);
+		inputData.read(header);
 		if(!read_dsp_header(header))
 			throw new FileFormatException("not a devkit DSP file");
 		decoder = new ADPCMDecoder();
@@ -149,7 +168,7 @@ public class DSP implements Stream {
 
 	@Override
 	public void close() throws IOException {
-		file.close();
+		inputData.close();
 		if(ch2 != null) {
 			ch2.close();
 			ch2 = null;
@@ -157,7 +176,7 @@ public class DSP implements Stream {
 	}
 
 	private void seek(long offset) throws IOException {
-		file.seek(offset);
+		inputData.seek(offset);
 	}
 
 	public boolean hasMoreData() {
@@ -182,7 +201,7 @@ public class DSP implements Stream {
 
 	private byte[] doDecode() throws IOException {
 		byte[] rawdata = new byte[8];
-		filepos += file.read(rawdata);
+		filepos += inputData.read(rawdata);
 		int[] samples = decoder.decode_ngc_dsp(0, 0, (int)(rawdata.length / 8.0 * 14.0), rawdata);
 		byte[] buffer = new byte[samples.length * 2];
 		for(int i = 0; i < samples.length; i++)

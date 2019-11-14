@@ -1,7 +1,10 @@
 package org.hackyourlife.gcn.dsp;
 
-import java.io.RandomAccessFile;
+import org.hackyourlife.gcn.dsp.input.InputData;
+
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
 
 public class BFSTM implements Stream {
 	long	sample_count;
@@ -15,7 +18,7 @@ public class BFSTM implements Stream {
 	int	channel_count;
 	int	coef[][];
 
-	RandomAccessFile file;
+	InputData inputData;
 	long	start_offset;
 	long	filepos;
 	long	filesize;
@@ -39,11 +42,19 @@ public class BFSTM implements Stream {
 	public final static int CODEC_PCM16BE = 1;
 	public final static int CODEC_ADPCM = 2;
 
-	public BFSTM(RandomAccessFile file) throws FileFormatException, IOException {
-		this.file = file;
-		this.filesize = file.length();
+	public BFSTM(InputData InputData) throws FileFormatException, IOException {
+		this.inputData = InputData;
+		this.filesize = InputData.length();
 		readHeader();
 		reset();
+	}
+
+	public BFSTM(RandomAccessFile file) throws IOException, FileFormatException {
+		this(InputData.getInputData(file));
+	}
+
+	public BFSTM(InputStream stream) throws IOException, FileFormatException {
+		this(InputData.getInputData(stream));
 	}
 
 	public final static int unsigned2signed16bit(int x) {
@@ -53,35 +64,35 @@ public class BFSTM implements Stream {
 	}
 
 	public int read_8bit(long offset) throws IOException {
-		file.seek(offset);
-		return file.read();
+		inputData.seek(offset);
+		return inputData.read();
 	}
 
 	public int read_16bitBE(long offset) throws IOException {
-		file.seek(offset);
+		inputData.seek(offset);
 		byte[] data = new byte[2];
-		file.read(data);
+		inputData.read(data);
 		return endianess.get_16bitBE(data);
 	}
 
 	public long read_32bitBE(long offset) throws IOException {
-		file.seek(offset);
+		inputData.seek(offset);
 		byte[] data = new byte[4];
-		file.read(data);
+		inputData.read(data);
 		return endianess.get_32bitBE(data);
 	}
 
 	public int read_16bitLE(long offset) throws IOException {
-		file.seek(offset);
+		inputData.seek(offset);
 		byte[] data = new byte[2];
-		file.read(data);
+		inputData.read(data);
 		return endianess.get_16bitLE(data);
 	}
 
 	public long read_32bitLE(long offset) throws IOException {
-		file.seek(offset);
+		inputData.seek(offset);
 		byte[] data = new byte[4];
-		file.read(data);
+		inputData.read(data);
 		return endianess.get_32bitLE(data);
 	}
 
@@ -119,7 +130,7 @@ public class BFSTM implements Stream {
 
 	@Override
 	public void close() throws Exception {
-		file.close();
+		inputData.close();
 	}
 
 	@Override
@@ -128,7 +139,7 @@ public class BFSTM implements Stream {
 	}
 
 	private void seek(long pos) throws IOException {
-		file.seek(start_offset + pos);
+		inputData.seek(start_offset + pos);
 		filepos = start_offset + pos;
 	}
 
@@ -268,7 +279,7 @@ public class BFSTM implements Stream {
 		byte[] rawdata = new byte[(int)(interleave * channel_count)];
 		int samplecnt = endsample - startsample;
 		int[] samples = new int[samplecnt * channel_count];
-		int read = file.read(rawdata);
+		int read = inputData.read(rawdata);
 		filepos += read;
 		current_byte += read / channel_count;
 		for(int ch = 0; ch < channel_count; ch++) {

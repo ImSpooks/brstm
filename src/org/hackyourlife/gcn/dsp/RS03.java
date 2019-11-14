@@ -1,6 +1,10 @@
 package org.hackyourlife.gcn.dsp;
 
-import java.io.*;
+import org.hackyourlife.gcn.dsp.input.InputData;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
 
 public class RS03 implements Stream {
 	public final static int HEADER_SIZE = 0x60;
@@ -14,7 +18,7 @@ public class RS03 implements Stream {
 	long	channel_count;
 	int	coef[][]; /* really 8x2 */
 
-	RandomAccessFile file;
+	InputData inputData;
 	long	startoffset;
 	long	filepos;
 	long	filesize;
@@ -27,12 +31,20 @@ public class RS03 implements Stream {
 
 	ADPCMDecoder decoder[];
 
-	public RS03(RandomAccessFile file) throws FileFormatException, IOException {
-		this.file = file;
+	public RS03(InputData file) throws FileFormatException, IOException {
+		this.inputData = file;
 		this.filesize = file.length();
 		if(!readHeader())
 			throw new FileFormatException("not a RS03 file");
 		reset();
+	}
+
+	public RS03(RandomAccessFile file) throws IOException, FileFormatException {
+		this(InputData.getInputData(file));
+	}
+
+	public RS03(InputStream stream) throws IOException, FileFormatException {
+		this(InputData.getInputData(stream));
 	}
 
 	public final static int unsigned2signed16bit(int x) {
@@ -41,7 +53,7 @@ public class RS03 implements Stream {
 		return (sign != 0) ? -(~x & 0xFFFF) : value;
 	}
 
-	public boolean read_dsp_header(byte[] header, RandomAccessFile in) throws IOException {
+	public boolean read_dsp_header(byte[] header, InputData in) throws IOException {
 		if(endianess.get_32bitBE(header, 0x00) != 0x52530003)
 			return(false);
 
@@ -90,11 +102,14 @@ public class RS03 implements Stream {
 		return getChannels() * (long)(getInterleaveSize() / 8.0 * 14.0);
 	}
 
-	public boolean open(String filename) throws Exception {
-		if(file != null)
+	public boolean open(String filename, boolean resource) throws Exception {
+		if(inputData != null)
 			close();
-		file = new RandomAccessFile(filename, "r");
-		filesize = file.length();
+		if (!resource)
+			inputData = InputData.getInputData(new RandomAccessFile(filename, "r"));
+		else
+			inputData = InputData.getInputData(this.getClass().getResourceAsStream(filename));
+		filesize = inputData.length();
 		return readHeader();
 	}
 
@@ -103,8 +118,8 @@ public class RS03 implements Stream {
 		startoffset = 0x20;
 
 		byte[] header = new byte[0x20];
-		file.read(header);
-		if(!read_dsp_header(header, file))
+		inputData.read(header);
+		if(!read_dsp_header(header, inputData))
 			return(false);
 
 		startoffset += 0x20 * channel_count;
@@ -128,7 +143,7 @@ public class RS03 implements Stream {
 
 	@Override
 	public void close() throws Exception {
-		file.close();
+		inputData.close();
 	}
 
 	@Override
@@ -137,7 +152,7 @@ public class RS03 implements Stream {
 	}
 
 	private void seek(long pos) throws IOException {
-		file.seek(startoffset + pos);
+		inputData.seek(startoffset + pos);
 		filepos = startoffset + pos;
 	}
 
@@ -177,7 +192,7 @@ public class RS03 implements Stream {
 		if(samplecnt < 0)
 			samplecnt = 0;
 		int[] samples = new int[(int)(samplecnt * channel_count)];
-		int read = file.read(rawdata);
+		int read = inputData.read(rawdata);
 		filepos += read;
 		current_byte += read / channel_count;
 		for(int ch = 0; ch < channel_count; ch++) {
