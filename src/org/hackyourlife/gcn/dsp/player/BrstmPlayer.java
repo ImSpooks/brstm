@@ -43,6 +43,10 @@ public class BrstmPlayer {
      */
     public void start() {
         this.clip.start();
+
+
+        if (this.doesLoop)
+            this.loop(Clip.LOOP_CONTINUOUSLY);
     }
 
     /**
@@ -221,7 +225,6 @@ public class BrstmPlayer {
             // setting looping point
             if (doesLoop) {
                 clip.setLoopPoints(Math.toIntExact(loop_start_sample), Math.toIntExact(loop_end_sample));
-                clip.loop(Clip.LOOP_CONTINUOUSLY);
             }
         } catch (Exception e) {
             e.printStackTrace();
