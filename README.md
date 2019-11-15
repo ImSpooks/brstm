@@ -33,4 +33,4 @@ The Brstm Player currently supports the following functions:
 - Stopping: `player.stop()`
 - Pausing: `player.pause()`
 - Resuming: `player.resume()`
-- Volume control: `player.setVolume(50.0f);`
+- Volume control: `player.setVolume(0.5F);`
