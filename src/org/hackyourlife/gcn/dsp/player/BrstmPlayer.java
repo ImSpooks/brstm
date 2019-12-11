@@ -177,8 +177,6 @@ public class BrstmPlayer {
                     break;
                 }
 
-                System.out.println("asyncThread.isInterrupted() = " + asyncThread.isInterrupted());
-
                 if (paused)
                     continue;
 
