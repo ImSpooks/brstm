@@ -4,6 +4,7 @@ import org.hackyourlife.gcn.dsp.AsyncDecoder;
 import org.hackyourlife.gcn.dsp.Stream;
 
 import javax.sound.sampled.*;
+import java.lang.reflect.Field;
 
 /**
  * Created by Nick on 11 dec. 2019.
@@ -17,6 +18,7 @@ public class BrstmPlayer {
     private int track;
     private AsyncDecoder decoder;
     private SourceDataLine waveout;
+    private boolean shouldStop = false;
 
     /**
      * Constructor for the brstm player
@@ -47,6 +49,7 @@ public class BrstmPlayer {
         this.asyncThread = new Thread(() -> {
             // starting the brstm file
             paused = false;
+            shouldStop = false;
             this.decoder = new AsyncDecoder(stream);
             this.decoder.start();
             this.play(decoder);
@@ -58,9 +61,18 @@ public class BrstmPlayer {
     /**
      * Stops the audio player
      */
-    public void stop() throws Exception {
-        stream.close();
+    public void stop() {
+        this.shouldStop = true;
+        this.asyncThread.interrupt();
         waveout.stop();
+
+        try {
+            Field field = stream.getClass().getDeclaredField("current_byte");
+            field.setAccessible(true);
+            field.setLong(stream, 0);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -68,7 +80,6 @@ public class BrstmPlayer {
      */
     public void pause() {
         this.paused = true;
-        waveout.stop();
     }
 
     /**
@@ -76,7 +87,6 @@ public class BrstmPlayer {
      */
     public void resume() {
         this.paused = false;
-        waveout.start();
     }
 
     /**
@@ -123,6 +133,19 @@ public class BrstmPlayer {
     }
 
     /**
+     *
+     */
+    public void close() {
+        shouldStop = true;
+        try {
+            stream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        waveout.stop();
+    }
+
+    /**
      * @param stream Decoder stream {@link AsyncDecoder}
      */
     private void play(AsyncDecoder stream) {
@@ -150,10 +173,13 @@ public class BrstmPlayer {
             waveout.open(format, 16384);
 
             waveout.start();
-            while(stream.hasMoreData()) {
+            main: while(!shouldStop && stream.hasMoreData()) {
                 if (stream.isInterrupted()) {
                     break;
                 }
+
+                System.out.println("asyncThread.isInterrupted() = " + asyncThread.isInterrupted());
+
                 if (paused)
                     continue;
 
@@ -165,6 +191,9 @@ public class BrstmPlayer {
 
                 // write each byte individually to make sure pausing works at an instant.
                 for (int i = 0; i < buffer.length; i+=4) {
+                    if (shouldStop)
+                        break main;
+
                     if (paused)
                         break;
                     waveout.write(new byte[] {
@@ -175,7 +204,7 @@ public class BrstmPlayer {
                     }, 0, 4);
                 }
             }
-            waveout.stop();
+            this.stop();
         } catch (Exception e) {
             e.printStackTrace();
         }
