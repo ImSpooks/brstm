@@ -67,12 +67,11 @@ public class BrstmPlayer {
         waveout.stop();
 
         try {
+            // resets position back to 0
             Field field = stream.getClass().getDeclaredField("current_byte");
             field.setAccessible(true);
             field.setLong(stream, 0);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
-        }
+        } catch (NoSuchFieldException | IllegalAccessException ignored) {}
     }
 
     /**
@@ -133,7 +132,7 @@ public class BrstmPlayer {
     }
 
     /**
-     *
+     * Closes the audio stream
      */
     public void close() {
         shouldStop = true;
