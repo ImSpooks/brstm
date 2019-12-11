@@ -1,26 +1,22 @@
 package org.hackyourlife.gcn.dsp.player;
 
+import org.hackyourlife.gcn.dsp.AsyncDecoder;
 import org.hackyourlife.gcn.dsp.Stream;
 
 import javax.sound.sampled.*;
-import java.io.ByteArrayInputStream;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Created by Nick on 14 nov. 2019.
+ * Created by Nick on 11 dec. 2019.
  * Copyright © ImSpooks
  */
 public class BrstmPlayer {
 
     private Stream stream;
-
-    private Clip clip;
+    private Thread asyncThread;
     private boolean paused = false;
-    private long position;
-    private int track = -1;
-    private boolean doesLoop;
+    private int track;
+    private AsyncDecoder decoder;
+    private SourceDataLine waveout;
 
     /**
      * Constructor for the brstm player
@@ -30,8 +26,6 @@ public class BrstmPlayer {
     public BrstmPlayer(Stream stream, int track) {
         this.stream = stream;
         this.track = track;
-
-        this.initialize();
     }
 
     public BrstmPlayer(Stream stream) {
@@ -42,52 +36,47 @@ public class BrstmPlayer {
      * Starts the audio player
      */
     public void start() {
-        this.clip.start();
+        // check if result isnt null
+        if (this.stream == null) {
+            throw new NullPointerException("Cannot handle BRSTM player for an empty or undefined stream");
+        }
 
+        // if audio is already playing it resets
 
-        if (this.doesLoop)
-            this.loop(Clip.LOOP_CONTINUOUSLY);
+        // setting up a async thread so the current doesn't freeze so other code in the same thread can continue
+        this.asyncThread = new Thread(() -> {
+            // starting the brstm file
+            paused = false;
+            this.decoder = new AsyncDecoder(stream);
+            this.decoder.start();
+            this.play(decoder);
+
+        });
+        this.asyncThread.start();
     }
 
     /**
      * Stops the audio player
      */
-    public void stop() {
-        this.clip.stop();
+    public void stop() throws Exception {
+        stream.close();
+        waveout.stop();
     }
 
     /**
      * Paused the audio player
      */
     public void pause() {
-        if (this.paused)
-            throw new UnsupportedOperationException("Audio already paused");
-
-        this.position = this.clip.getFramePosition();
-        this.stop();
         this.paused = true;
+        waveout.stop();
     }
 
     /**
      * Resumes the audio player
      */
     public void resume() {
-        if (!this.paused)
-            throw new UnsupportedOperationException("Audio already playing");
-
-        this.clip.setFramePosition(Math.toIntExact(this.position));
-        this.start();
         this.paused = false;
-    }
-
-    /**
-     * Loops the audio file {@param amount} times.
-     * Use {@code Clip.LOOP_CONTINUOUSLY} for a non stopping loop.
-     * @param amount Loops the audio file x amount of times.
-     * @link javax.sound.sampled.Clip.LOOP_CONTINUOUSLY
-     */
-    public void loop(int amount) {
-        this.clip.loop(amount);
+        waveout.start();
     }
 
     /**
@@ -99,7 +88,7 @@ public class BrstmPlayer {
     public void setVolume(float percentage) {
         percentage = Math.max(0.0F, Math.min(1.0F, percentage));
 
-        FloatControl gain = (FloatControl) this.clip.getControl(FloatControl.Type.MASTER_GAIN);
+        FloatControl gain = (FloatControl) this.waveout.getControl(FloatControl.Type.MASTER_GAIN);
         float dB = (float) (Math.log(percentage) / Math.log(gain.getMaximum()) * 20);
         gain.setValue(dB);
     }
@@ -113,22 +102,6 @@ public class BrstmPlayer {
     }
 
     /**
-     * @return The audio clip
-     */
-    public Clip getClip() {
-        return clip;
-    }
-
-    /**
-     * @return Get the current position of the audio player
-     */
-    public long getPosition() {
-        if (!this.isPaused())
-            return this.clip.getFramePosition();
-        return position;
-    }
-
-    /**
      * @return The track/channel that is playing
      */
     public int getTrack() {
@@ -136,96 +109,73 @@ public class BrstmPlayer {
     }
 
     /**
-     * @return If the original audio file has a looping point.
+     * @return The original brstm/bfstm stream
      */
-    public boolean doesLoop() {
-        return doesLoop;
+    public Stream getStream() {
+        return stream;
     }
 
     /**
-     * Initializes the audio file to be played. Time to initialize depends on your computer performance and file size.
+     * @return The thread the music is playing on
      */
-    private void initialize() {
+    public Thread getAsyncThread() {
+        return asyncThread;
+    }
+
+    /**
+     * @param stream Decoder stream {@link AsyncDecoder}
+     */
+    private void play(AsyncDecoder stream) {
         try {
-            long loop_start_sample;
-            long loop_end_sample;
-
-            try {
-                // getting start sample
-                Field startSample = stream.getClass().getDeclaredField("loop_start_sample");
-                startSample.setAccessible(true);
-                loop_start_sample = startSample.getLong(stream);
-
-                // getting end sample
-                Field endSample = stream.getClass().getDeclaredField("loop_end_sample");
-                endSample.setAccessible(true);
-                loop_end_sample = endSample.getLong(stream);
-            } catch (Exception e) {
-                try {
-                    // getting start sample
-                    Field startSample = stream.getClass().getDeclaredField("loop_start_offset");
-                    startSample.setAccessible(true);
-                    loop_start_sample = Math.round(startSample.getLong(stream) / 8.0 * 14.0);
-
-                    // getting end sample
-                    Field endSample = stream.getClass().getDeclaredField("loop_end_offset");
-                    endSample.setAccessible(true);
-                    loop_end_sample = Math.round(endSample.getLong(stream) / 8.0 * 14.0);
-                } catch (Exception ex) {
-                    throw new UnsupportedOperationException("Unsupported stream found.");
-                }
-            }
-
             int channels = stream.getChannels();
             if(channels > 2) {
                 channels = 2;
             }
             AudioFormat format = new AudioFormat(
                     AudioFormat.Encoding.PCM_SIGNED,	// encoding
-                    stream.getSampleRate(),			// sample rate
+                    stream.getSampleRate(),			    // sample rate
                     16,					// bit/sample
-                    channels,				// channels
+                    channels,				            // channels
                     2 * channels,
                     stream.getSampleRate(),
-                    true					// big-endian
+                    true					    // big-endian
             );
 
-            // set loop to false
-            Field field = stream.getClass().getDeclaredField("loop_flag");
-            field.setAccessible(true);
+            DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+            if(!AudioSystem.isLineSupported(info)) {
+                throw new Exception("Line matching " + info + " not supported");
+            }
 
-            doesLoop = field.getInt(stream) != 0;
+            this.waveout = (SourceDataLine) AudioSystem.getLine(info);
+            waveout.open(format, 16384);
 
-            field.setInt(stream, 0);
+            waveout.start();
+            while(stream.hasMoreData()) {
+                if (stream.isInterrupted()) {
+                    break;
+                }
+                if (paused)
+                    continue;
 
-            List<Byte> data = new ArrayList<>();
-            while (stream.hasMoreData()) {
                 byte[] buffer = stream.decode();
-                for (byte b : sum(buffer, stream.getChannels(), track)) {
-                    // putting all bytes in to an arraylist
-                    data.add(b);
+                if (buffer == null)
+                    continue;
+
+                buffer = sum(buffer, stream.getChannels(), track);
+
+                // write each byte individually to make sure pausing works at an instant.
+                for (int i = 0; i < buffer.length; i+=4) {
+                    if (paused)
+                        break;
+                    waveout.write(new byte[] {
+                            buffer[i],
+                            buffer[i + 1],
+                            buffer[i + 2],
+                            buffer[i + 3]
+                    }, 0, 4);
                 }
             }
-
-            // converting arraylist back to array
-            byte[] result = new byte[data.size()];
-            for (int i = 0; i < data.size(); i++) {
-                result[i] = data.get(i);
-            }
-
-            ByteArrayInputStream byteStream = new ByteArrayInputStream(result);
-
-            AudioInputStream sound = new AudioInputStream(byteStream, format,
-                    result.length);
-
-            // creating audio clip with brstm's audio data
-            DataLine.Info info = new DataLine.Info(Clip.class, sound.getFormat());
-            clip = (Clip) AudioSystem.getLine(info);
-            clip.open(sound);
-            // setting looping point
-            if (doesLoop) {
-                clip.setLoopPoints(Math.toIntExact(loop_start_sample), Math.toIntExact(loop_end_sample));
-            }
+            waveout.stop();
         } catch (Exception e) {
             e.printStackTrace();
         }

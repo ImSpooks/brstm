@@ -60,7 +60,8 @@ public class AsyncDecoder extends Thread implements Stream {
 				}
 			} catch(InterruptedException e) {
 			} catch(Exception e) {
-				e.printStackTrace();
+				if (!e.getMessage().equalsIgnoreCase("Stream closed"))
+					e.printStackTrace();
 				return;
 			}
 		}

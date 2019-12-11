@@ -101,7 +101,7 @@ public class Player {
                     String line = scanner.nextLine().trim();
 
                     if (exits.stream().anyMatch(line::contains)) {
-                        break;
+                        brstmPlayer.stop();
                     }
 
                     if (brstmPlayer != null) {
@@ -119,6 +119,7 @@ public class Player {
                             String[] args = line.split(" ");
                             if (args[0].equalsIgnoreCase("volume")) {
                                 try {
+                                    // between 0 and 1
                                     float percentage = Float.parseFloat(args[1]);
 
                                     brstmPlayer.setVolume(percentage);
@@ -129,6 +130,8 @@ public class Player {
                         }
                     }
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         });
     }
