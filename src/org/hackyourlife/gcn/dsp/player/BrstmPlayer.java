@@ -45,17 +45,12 @@ public class BrstmPlayer {
 
         // if audio is already playing it resets
 
-        // setting up a async thread so the current doesn't freeze so other code in the same thread can continue
-        this.asyncThread = new Thread(() -> {
-            // starting the brstm file
-            paused = false;
-            shouldStop = false;
-            this.decoder = new AsyncDecoder(stream);
-            this.decoder.start();
-            this.play(decoder);
-
-        });
-        this.asyncThread.start();
+        // starting the brstm file
+        paused = false;
+        shouldStop = false;
+        this.decoder = new AsyncDecoder(stream);
+        this.decoder.start();
+        this.play(decoder);
     }
 
     /**
@@ -172,36 +167,47 @@ public class BrstmPlayer {
             waveout.open(format, 16384);
 
             waveout.start();
-            main: while(!shouldStop && stream.hasMoreData()) {
-                if (stream.isInterrupted()) {
-                    break;
-                }
 
-                if (paused)
-                    continue;
-
-                byte[] buffer = stream.decode();
-                if (buffer == null)
-                    continue;
-
-                buffer = sum(buffer, stream.getChannels(), track);
-
-                // write each byte individually to make sure pausing works at an instant.
-                for (int i = 0; i < buffer.length; i+=4) {
-                    if (shouldStop)
-                        break main;
+            // setting up a async thread so the current doesn't freeze so other code in the same thread can continue
+            this.asyncThread = new Thread(() -> {
+                main: while(!shouldStop && stream.hasMoreData()) {
+                    if (stream.isInterrupted()) {
+                        break;
+                    }
 
                     if (paused)
-                        break;
-                    waveout.write(new byte[] {
-                            buffer[i],
-                            buffer[i + 1],
-                            buffer[i + 2],
-                            buffer[i + 3]
-                    }, 0, 4);
+                        continue;
+
+                    byte[] buffer = new byte[0];
+                    try {
+                        buffer = stream.decode();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    if (buffer == null || buffer.length == 0)
+                        continue;
+
+                    buffer = sum(buffer, stream.getChannels(), track);
+
+                    // write each byte individually to make sure pausing works at an instant.
+                    for (int i = 0; i < buffer.length; i+=4) {
+                        if (shouldStop)
+                            break main;
+
+                        if (paused)
+                            break;
+                        waveout.write(new byte[] {
+                                buffer[i],
+                                buffer[i + 1],
+                                buffer[i + 2],
+                                buffer[i + 3]
+                        }, 0, 4);
+                    }
                 }
-            }
-            this.stop();
+                this.stop();
+            });
+            this.asyncThread.start();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
